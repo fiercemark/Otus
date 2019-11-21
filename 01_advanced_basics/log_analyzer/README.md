@@ -3,29 +3,20 @@
 
 This is a simple log analyzer.
 
-
-Usage example (How to use)
+Usage example
 ---------------
 
 1. Run `python log_analyzer.py --config <config_path>`
-
-
-
-
-1. Navigate over to https://developer.uber.com/, and sign up for an Uber developer account.
-2. Register a new Uber application and make your Redirect URI `http://localhost:7000/submit` - ensure that both the `profile` and `history` OAuth scopes are checked.
-3. Fill in the relevant information in the `config.json` file in the root folder and add your client id and secret as the environment variables `UBER_CLIENT_ID` and `UBER_CLIENT_SECRET`.
-4. Run `export UBER_CLIENT_ID="`*{your client id}*`"&&export UBER_CLIENT_SECRET="`*{your client secret}*`"`
-5. Run `pip install -r requirements.txt` to install dependencies
-6. Run `python app.py`
-7. Navigate to http://localhost:7000 in your browser
-
+2. Fill LOG_DIR, REPORT_DIR in the `config.json` using this format
+`config = {`
+    `'REPORT_SIZE': 1000,`
+    `'REPORT_DIR': './reports',`
+    `'LOG_DIR': './log'`
+`}`
 
 Testing
 -------
 
-1. Install the dependencies with `make bootstrap`
-2. Run the command `make test`
-3. If you delete the fixtures, or decide to add some of your own, you’ll have to re-generate them, and the way this is done is by running the app, getting an auth_token from the main page of the app. Paste that token in place of the `test_auth_token` at the top of the `test_endpoints.py` file, then run the tests.
+1. Run the command `python -m unittest -v test_log_analyzer`
+2. All test should be `OK`
 
-greate way to editing README - https://dillinger.io/

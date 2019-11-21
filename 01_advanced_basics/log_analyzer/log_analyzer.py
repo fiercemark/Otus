@@ -23,6 +23,7 @@ config = {
     'LOG_DIR': './log'
 }
 
+
 html_template = '''
 <!doctype html>
 
@@ -180,7 +181,7 @@ def create_logger(log_path):
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
 
-    log_hadler = logging.FileHandler(log_path)
+    log_hadler = logging.FileHandler(log_path) if log_path else logging.StreamHandler()
     log_hadler.setFormatter(formatter)
     logger.addHandler(log_hadler)
     logger.setLevel(logging.INFO)
@@ -209,6 +210,8 @@ def find_last_log(config, LogMeta):
     re_file_name = re.compile(r'(^nginx-access-ui\.log-(?P<date>[0-9]+)?(\.gz)?)?$')
     redate = re.compile((r'([0-9]+)'))
 
+    if not os.path.exists(config.LOG_DIR):
+        return None
     file_array_it = (re_file_name.match(file).group(1) for file in os.listdir(config.LOG_DIR) if re_file_name.match(file))
 
     for file in file_array_it:
@@ -233,6 +236,7 @@ def find_last_log(config, LogMeta):
 
     return LogMeta(path=config.LOG_DIR + '/' + last_file, date=redate.match(last_file.split('-')[-1]).group(1),
                                             expansion=expansion)
+
 
 def get_date(file_name):
     return ''.join(file_name.split('-')[1].split('.')[:-1])
@@ -281,6 +285,7 @@ def xreadlines(log_meta, logger, parser=parserline, errors_limit=None):
     if errors_limit is not None and total_lines > 0 and error / float(total_lines) > errors_limit:
         raise RuntimeError('To much errors in log!')
 
+
 def update_statistic_store(store, url, response_time):
     rec = store.get(url)
     if not rec:
@@ -300,16 +305,18 @@ def update_statistic_store(store, url, response_time):
     rec['avg_responce_time'] = rec['response_time_sum'] / rec['request_count']
     rec['all_responce_time'].append(response_time)
 
-def cals_statistic(loglines, config_meta, log_meta, logger):
+
+def cals_statistic(log_lines, config_meta):
     url_count = 0
     total_req_time = 0.0
     store = {}
-    for url, request_time in loglines:
+    for url, request_time in log_lines:
         url_count += 1
         total_req_time += request_time
         update_statistic_store(store, url, request_time)
     agreggatebyurl = sorted(store.items(), key=lambda item : item[1]['avg_responce_time'], reverse=True)
-    agreggatebyurl = agreggatebyurl[:config_meta.REPORT_SIZE]
+    if config_meta.REPORT_SIZE > len(agreggatebyurl):
+        agreggatebyurl = agreggatebyurl[:config_meta.REPORT_SIZE]
 
     #
     for url, val in agreggatebyurl:
@@ -333,7 +340,8 @@ def generate_report(statistic, config, log_meta, template):
     if not os.path.exists(config.REPORT_DIR):
         os.makedirs(config.REPORT_DIR)
 
-    with open(os.path.join(config.REPORT_DIR, report_name), 'w') as fw:
+    with open(os.path.join(config.REPORT_DIR, report_name), 'wb') as fw:
+        result_file = result_file.encode('utf-8')
         fw.write(result_file)
 
 
@@ -355,13 +363,16 @@ def main(config, logger, template):
     logger.info('Start reading log')
     try:
         log_lines_it = xreadlines(log_meta, logger, parser=parserline)
+        print(list(log_lines_it)[:10])
     except RuntimeError as e:
         logger.exception('msg: {}'.format(e), exc_info=True)
 
-    staticticit = cals_statistic(log_lines_it, config, log_meta, logger)
+    staticticit = cals_statistic(log_lines_it, config)
     logger.info('Calc Statistic finish')
+    print(list(staticticit)[:10])
     generate_report(staticticit, config, log_meta, template)
     logger.info('Generate statistic finish')
+
 
 if __name__ == "__main__":
     args = parse_args()
