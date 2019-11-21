@@ -76,7 +76,6 @@ class TestEnv(unittest.TestCase):
 
 
     def test_invalid_find_log(self):
-        self.del_logs(self.config)
         last_log = log_analyzer.find_last_log(self.config, self.logmeta)
         self.assertEqual(last_log, None, 'Should be None')
 
