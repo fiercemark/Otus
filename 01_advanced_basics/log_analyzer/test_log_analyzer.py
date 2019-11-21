@@ -49,7 +49,12 @@ class TestBasic(unittest.TestCase):
 
 class TestEnv(unittest.TestCase):
     def setUp(self):
-        self.config = namedtuple('Config', sorted(log_analyzer.config))(**log_analyzer.config)
+        config = {
+            'REPORT_SIZE': 1000,
+            'REPORT_DIR': './reports_test',
+            'LOG_DIR': './log_test'
+        }
+        self.config = namedtuple('Config', sorted(config))(**config)
         self.logmeta = namedtuple('logmeta', ['path', 'date', 'expansion'])
         self.log_meta = ''
 
@@ -83,8 +88,9 @@ class TestEnv(unittest.TestCase):
     def test_ok_last_log(self):
         self.create_logs(self.config)
         log_meta = log_analyzer.find_last_log(self.config, self.logmeta)
-        self.assertEqual(log_meta.path, './log/nginx-access-ui.log-20170703.gz',
+        self.assertEqual(log_meta.path, './log_test/nginx-access-ui.log-20170703.gz',
                                             'Should be ./log/nginx-access-ui.log-20170703.gz')
+        self.del_logs(self.config)
 
     def del_reports(self, config):
         shutil.rmtree(config.REPORT_DIR)
@@ -96,6 +102,7 @@ class TestEnv(unittest.TestCase):
         log_meta = log_analyzer.find_last_log(self.config, self.logmeta)
         is_report_exist = log_analyzer.check_current_report_done(log_meta, self.config)
         self.assertTrue(is_report_exist, 'Should be True')
+        self.del_reports(self.config)
 
 
 class TestFunction(unittest.TestCase):

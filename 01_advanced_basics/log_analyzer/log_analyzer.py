@@ -349,29 +349,27 @@ def main(config, logger, template):
     LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
     log_meta = find_last_log(config, LogMeta)
     if not log_meta:
-        logger.info('Sorry. No log yet!!!!')
+        logger.info('Sorry. No logs found!!!!')
         return
     logger.info('Find last log file: {}'.format(log_meta.path))
 
-    logger.info('Check report')
+    logger.info('Checking the report')
     if os.path.exists(config.REPORT_DIR) and os.listdir(config.REPORT_DIR):
         exist = check_current_report_done(log_meta, config)
         if exist:
-            logger.info('Report already created')
+            logger.info('The report has already been generated')
             return
 
-    logger.info('Start reading log')
+    logger.info('Start reading the log')
     try:
         log_lines_it = xreadlines(log_meta, logger, parser=parserline)
-        print(list(log_lines_it)[:10])
     except RuntimeError as e:
         logger.exception('msg: {}'.format(e), exc_info=True)
 
     staticticit = cals_statistic(log_lines_it, config)
-    logger.info('Calc Statistic finish')
-    print(list(staticticit)[:10])
+    logger.info('Statistics calculation is finished')
     generate_report(staticticit, config, log_meta, template)
-    logger.info('Generate statistic finish')
+    logger.info('Calculation generation is finished')
 
 
 if __name__ == "__main__":
