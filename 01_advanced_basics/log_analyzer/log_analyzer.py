@@ -25,6 +25,14 @@ config = {
 
 REPORT_TEMPLATE_PATH =  "./template.html"
 
+LOG_NAME_RE = re.compile(r'(?P<name>^nginx-access-ui\.log-(?P<date>[0-9]+)?(?P<extension>\.gz)?)?$')
+
+LOG_ROW_RE = re.compile(r'(^\S+ )\S+\s+\S+ (\[\S+ \S+\] )' 
+                r'(\"\S+ (\S+) \S+\") \d+ \d+ \"\S+\" ' 
+                r'\".*\" \"\S+\" \"\S+\" \"\S+\" (\d+\.\d+)')
+
+
+
 LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
 
 def parse_args():
@@ -68,15 +76,15 @@ def find_last_log(config, LogMeta):
     last_file = None
     last_file_date = None
 
-    re_file_name = re.compile(r'(^nginx-access-ui\.log-(?P<date>[0-9]+)?(\.gz)?)?$')
-    redate = re.compile((r'([0-9]+)'))
-
     if not os.path.exists(config.LOG_DIR):
         return None
-    file_array_it = (re_file_name.match(file).group(1) for file in os.listdir(config.LOG_DIR) if re_file_name.match(file))
 
-    for file in file_array_it:
-        date_parse = redate.match(file.split('-')[-1]).group(1)
+    for file_name in os.listdir(config.LOG_DIR):
+        match = LOG_NAME_RE.match(file_name)
+        if not match:
+            continue
+        date_parse = match.groupdict()['date']
+        file = match.groupdict()['name']
         try:
             date = datetime.strptime(date_parse, '%Y%m%d')
         except ValueError:
@@ -90,12 +98,12 @@ def find_last_log(config, LogMeta):
     if not last_file:
         return None
 
-    if re_file_name.match(last_file).group(3) == '.gz':
+    if last_file.split('.')[-1] == 'gz':
         expansion = '.gz'
     else:
         expansion = ''
 
-    return LogMeta(path=config.LOG_DIR + '/' + last_file, date=redate.match(last_file.split('-')[-1]).group(1),
+    return LogMeta(path=os.path.join(config.LOG_DIR, last_file), date=datetime.strftime(last_file_date,'%Y%m%d'),
                                             expansion=expansion)
 
 
@@ -111,15 +119,12 @@ def check_current_report_done(log_meta, config):
     return False
 
 
+
 def parserline(line):
-    parse_regexp = r'(^\S+ )\S+\s+\S+ (\[\S+ \S+\] )' \
-                   r'(\"\S+ (\S+) \S+\") \d+ \d+ \"\S+\" ' \
-                   r'\".*\" \"\S+\" \"\S+\" \"\S+\" (\d+\.\d+)'
-    regex = re.compile(parse_regexp)
-    if not regex.match(line):
+    if not LOG_ROW_RE.match(line):
         return None
-    url_path = regex.match(line).group(4)
-    request_time = float(regex.match(line).group(5))
+    url_path = LOG_ROW_RE.match(line).group(4)
+    request_time = float(LOG_ROW_RE.match(line).group(5))
     result = (url_path, request_time)
     return result
 
@@ -213,7 +218,7 @@ def generate_report(statistic, config, log_meta, template_path):
 
 
 def main(config, logger):
-    # LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
+    LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
     log_meta = find_last_log(config, LogMeta)
     if not log_meta:
         logger.info('Sorry. No logs found!!!!')
