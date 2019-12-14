@@ -23,148 +23,9 @@ config = {
     'LOG_DIR': './log'
 }
 
+REPORT_TEMPLATE_PATH =  "./template.html"
 
-html_template = '''
-<!doctype html>
-
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>rbui log analysis report</title>
-  <meta name="description" content="rbui log analysis report">
-  <style type="text/css">
-    html, body {
-      background-color: black;
-    }
-    th {
-      text-align: center;
-      color: silver;
-      font-style: bold;
-      padding: 5px;
-      cursor: pointer;
-    }
-    table {
-      width: auto;
-      border-collapse: collapse;
-      margin: 1%;
-      color: silver;
-    }
-    td {
-      text-align: right;
-      font-size: 1.1em;
-      padding: 5px;
-    }
-    .report-table-body-cell-url {
-      text-align: left;
-      width: 20%;
-    }
-    .clipped {
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      overflow:hidden !important;
-      max-width: 700px;
-      word-wrap: break-word;
-      display:inline-block;
-    }
-    .url {
-      cursor: pointer;
-      color: #729FCF;
-    }
-    .alert {
-      color: red;
-    }
-  </style>
-</head>
-
-<body>
-  <table border="1" class="report-table">
-  <thead>
-    <tr class="report-table-header-row">
-    </tr>
-  </thead>
-  <tbody class="report-table-body">
-  </tbody>
-
-  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-  <script type="text/javascript" 
-  src="/Users/s.stupnikov/Dev/hive7/home/s.stupnikov/custom/analyzer/jquery.tablesorter.min.js"></script> 
-  <script type="text/javascript">
-  !function($) {
-    var table = {table_json}
-        var reportDates;
-    var columns = new Array();
-    var lastRow = 150;
-    var $table = $(".report-table-body");
-    var $header = $(".report-table-header-row");
-    var $selector = $(".report-date-selector");
-
-    $(document).ready(function() {
-      $(window).bind("scroll", bindScroll);
-        var row = table[0];
-        for (k in row) {
-          columns.push(k);
-        }
-        columns = columns.sort();
-        columns = columns.slice(columns.length -1, columns.length).concat(columns.slice(0, columns.length -1));
-        drawColumns();
-        drawRows(table.slice(0, lastRow));
-        $(".report-table").tablesorter(); 
-    });
-
-    function drawColumns() {
-      for (var i = 0; i < columns.length; i++) {
-        var $th = $("<th></th>").text(columns[i])
-                                .addClass("report-table-header-cell")
-        $header.append($th);
-      }
-    }
-
-    function drawRows(rows) {
-      for (var i = 0; i < rows.length; i++) {
-        var row = rows[i];
-        var $row = $("<tr></tr>").addClass("report-table-body-row");
-        for (var j = 0; j < columns.length; j++) {
-          var columnName = columns[j];
-          var $cell = $("<td></td>").addClass("report-table-body-cell");
-          if (columnName == "url") {
-            var url = "https://rb.mail.ru" + row[columnName];
-            var $link = $("<a></a>").attr("href", url)
-                                    .attr("title", url)
-                                    .attr("target", "_blank")
-                                    .addClass("clipped")
-                                    .addClass("url")
-                                    .text(row[columnName]);
-            $cell.addClass("report-table-body-cell-url");
-            $cell.append($link);
-          }
-          else {
-            $cell.text(row[columnName]);
-            if (columnName == "time_avg" && row[columnName] > 0.9) {
-              $cell.addClass("alert");
-            }
-          }
-          $row.append($cell);
-        }
-        $table.append($row);
-      }
-      $(".report-table").trigger("update"); 
-    }
-
-    function bindScroll() {
-      if($(window).scrollTop() == $(document).height() - $(window).height()) {
-        if (lastRow < 1000) {
-          drawRows(table.slice(lastRow, lastRow + 50));
-          lastRow += 50;
-        }
-      }
-    }
-
-  }(window.jQuery)
-  </script>
-</body>
-</html>
-'''
-
+LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -332,8 +193,14 @@ def cals_statistic(log_lines, config_meta):
         }
 
 
-def generate_report(statistic, config, log_meta, template):
-    result_file = template.replace("{", "{{").replace("}", "}}").replace("{table_json}", "table_json").\
+def generate_report(statistic, config, log_meta, template_path):
+
+    with open(template_path, 'rb') as tf:
+        template_file = tf.read().decode('utf-8')
+        # template = Template(template_file)
+    
+    # result = template.safe_substitute(table_json=json.dumps(list(statistic)))
+    result = template_file.replace("{", "{{").replace("}", "}}").replace("{table_json}", "table_json").\
                                                                 format(table_json=list(statistic))
     report_name = 'report-' + '.'.join([log_meta.date[:4], log_meta.date[4:6], log_meta.date[6:]]) + '.html'
 
@@ -341,12 +208,12 @@ def generate_report(statistic, config, log_meta, template):
         os.makedirs(config.REPORT_DIR)
 
     with open(os.path.join(config.REPORT_DIR, report_name), 'wb') as fw:
-        result_file = result_file.encode('utf-8')
-        fw.write(result_file)
+        result = result.encode('utf-8')
+        fw.write(result)
 
 
-def main(config, logger, template):
-    LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
+def main(config, logger):
+    # LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
     log_meta = find_last_log(config, LogMeta)
     if not log_meta:
         logger.info('Sorry. No logs found!!!!')
@@ -368,7 +235,7 @@ def main(config, logger, template):
 
     staticticit = cals_statistic(log_lines_it, config)
     logger.info('Statistics calculation is finished')
-    generate_report(staticticit, config, log_meta, template)
+    generate_report(staticticit, config, log_meta, REPORT_TEMPLATE_PATH)
     logger.info('Calculation generation is finished')
 
 
@@ -379,15 +246,16 @@ if __name__ == "__main__":
         with open(args.config_path, 'rb') as conf:
             ext_config = json.load(conf, encoding='utf-8')
 
-    merged_config = merge_config(config, ext_config)
+    # merged_config = merge_config(config, ext_config)
+    config.update(ext_config)
 
-    logger = create_logger(merged_config.get('SCRIPT_LOG_PATH'))
+    logger = create_logger(config.get('SCRIPT_LOG_PATH'))
     logger.info('Analyzer start work')
 
-    Config = namedtuple('Config', sorted(merged_config))
-    config = Config(**merged_config)
+    Config = namedtuple('Config', sorted(config))
+    config = Config(**config)
 
     try:
-        main(config, logger, template=html_template)
+        main(config, logger)
     except:
         logger.exception('Something wrong')
