@@ -10,7 +10,6 @@ import logging
 from statistics import median
 import os
 import re
-import sys
 
 # log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
 #                     '$status $body_bytes_sent "$http_referer" '
@@ -31,9 +30,8 @@ LOG_ROW_RE = re.compile(r'(^\S+ )\S+\s+\S+ (\[\S+ \S+\] )'
                 r'(\"\S+ (\S+) \S+\") \d+ \d+ \"\S+\" ' 
                 r'\".*\" \"\S+\" \"\S+\" \"\S+\" (\d+\.\d+)')
 
-
-
 LogMeta = namedtuple('LogMeta', ['path', 'date', 'expansion'])
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -113,11 +111,9 @@ def generate_report_name(log_meta):
 
 def check_current_report_done(log_meta, config):
     report_name = generate_report_name(log_meta)
-    print(report_name)
     if report_name in os.listdir(config.REPORT_DIR):
         return True
     return False
-
 
 
 def parserline(line):
@@ -201,9 +197,7 @@ def cals_statistic(log_lines, config_meta):
 def generate_report(statistic, config, log_meta, template_path):
     with open(template_path, 'rb') as tf:
         template_file = tf.read().decode('utf-8')
-        # template = Template(template_file)
 
-    # result = template.safe_substitute(table_json=json.dumps(list(statistic)))
     result = template_file.replace("{", "{{").replace("}", "}}").replace("{table_json}", "table_json").\
                                                                 format(table_json=list(statistic))
     report_name = generate_report_name(log_meta)
@@ -250,7 +244,6 @@ if __name__ == "__main__":
         with open(args.config_path, 'rb') as conf:
             ext_config = json.load(conf, encoding='utf-8')
 
-    # merged_config = merge_config(config, ext_config)
     config.update(ext_config)
 
     logger = create_logger(config.get('SCRIPT_LOG_PATH'))
