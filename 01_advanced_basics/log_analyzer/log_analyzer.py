@@ -107,14 +107,14 @@ def find_last_log(config, LogMeta):
                                             expansion=expansion)
 
 
-def get_date(file_name):
-    return ''.join(file_name.split('-')[1].split('.')[:-1])
+def generate_report_name(log_meta):
+    return 'report-' + '.'.join([log_meta.date[:4], log_meta.date[4:6], log_meta.date[6:]]) + '.html'
 
 
 def check_current_report_done(log_meta, config):
-    file_array_it = (get_date(file) for file in os.listdir(config.REPORT_DIR))
-    reports = set([report_date for report_date in file_array_it if log_meta.date == report_date])
-    if reports:
+    report_name = generate_report_name(log_meta)
+    print(report_name)
+    if report_name in os.listdir(config.REPORT_DIR):
         return True
     return False
 
@@ -199,15 +199,14 @@ def cals_statistic(log_lines, config_meta):
 
 
 def generate_report(statistic, config, log_meta, template_path):
-
     with open(template_path, 'rb') as tf:
         template_file = tf.read().decode('utf-8')
         # template = Template(template_file)
-    
+
     # result = template.safe_substitute(table_json=json.dumps(list(statistic)))
     result = template_file.replace("{", "{{").replace("}", "}}").replace("{table_json}", "table_json").\
                                                                 format(table_json=list(statistic))
-    report_name = 'report-' + '.'.join([log_meta.date[:4], log_meta.date[4:6], log_meta.date[6:]]) + '.html'
+    report_name = generate_report_name(log_meta)
 
     if not os.path.exists(config.REPORT_DIR):
         os.makedirs(config.REPORT_DIR)
