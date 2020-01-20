@@ -5,7 +5,6 @@ import unittest
 
 import api
 
-
 def cases(cases):
     def decorator(f):
         @functools.wraps(f)
@@ -37,7 +36,7 @@ class TestSuite(unittest.TestCase):
     def test_empty_request(self):
         _, code = self.get_response({})
         self.assertEqual(api.INVALID_REQUEST, code)
-    #
+
     @cases([
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "token": "", "arguments": {}},
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "token": "sdd", "arguments": {}},
@@ -46,7 +45,7 @@ class TestSuite(unittest.TestCase):
     def test_bad_auth(self, request):
         _, code = self.get_response(request)
         self.assertEqual(api.FORBIDDEN, code)
-    #
+
     @cases([
         {"account": "horns&hoofs", "login": "h&f", "method": "online_score"},
         {"account": "horns&hoofs", "login": "h&f", "arguments": {}},
@@ -57,7 +56,7 @@ class TestSuite(unittest.TestCase):
         response, code = self.get_response(request)
         self.assertEqual(api.INVALID_REQUEST, code)
         self.assertTrue(len(response))
-    #
+
     @cases([
         {},
         {"phone": "79175002040"},
