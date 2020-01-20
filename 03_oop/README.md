@@ -1,7 +1,7 @@
-# log analyzer
+# Scoring API
 ==============================
 
-This is a simple log analyzer.
+This is a simple api for scoring system.
 
 Usage example
 ---------------
