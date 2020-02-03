@@ -207,7 +207,7 @@ class OnlineScoreRequest(Request):
         valid = False
         if super().is_valid():
             for fv, sv in valid_pairs:
-                if self.__dict__.get(fv) not in ['', None] and self.__dict__.get(sv) not in ['', None] :
+                if self.__dict__.get(fv) not in ['', None] and self.__dict__.get(sv) not in ['', None]:
                     valid = True
         return valid
 
