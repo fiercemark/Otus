@@ -202,12 +202,12 @@ class OnlineScoreRequest(Request):
     birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    def paire_is_valid(self):
+    def pair_is_valid(self):
         valid_pairs = [('first_name', 'last_name'), ('email', 'phone'), ('birthday', 'gender')]
         valid = False
         if super().is_valid():
             for fv, sv in valid_pairs:
-                if fv in self.__dict__ and sv in self.__dict__:
+                if self.__dict__.get(fv) not in ['', None] and self.__dict__.get(sv) not in ['', None] :
                     valid = True
         return valid
 
@@ -216,7 +216,7 @@ class OnlineScoreHandler(RequestHandler):
 
     def handle(self, request, arguments, ctx, store):
         ctx['has'] = [key for key, val in arguments.fields if key in arguments.__dict__]
-        if not arguments.paire_is_valid():
+        if not arguments.pair_is_valid():
             logging.info('No Valid Paired Arguments, code:{}'.format(INVALID_REQUEST))
             return ERRORS[INVALID_REQUEST], INVALID_REQUEST
         if request.is_admin:
