@@ -1,22 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import abc
-import argparse
 import json
 import datetime
 from dateutil import relativedelta
 import logging
 import hashlib
 import uuid
-import re
-from collections import OrderedDict
-from inspect import Parameter, Signature
 from optparse import OptionParser
-import scoring
-import os
-# from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+import scoring
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -44,266 +39,203 @@ GENDERS = {
     FEMALE: "female",
 }
 
+
 class Field(object):
-    def __init__(self, initial_value=None):
-        self.initial_value = initial_value
-
-    def validate(self, value):
-        return True
-
-
-class Nullable(Field):
-    def __init__(self, *args, initial_value=None, required=False, nullable=False, **kwargs):
-        super().__init__(*args, initial_value, **kwargs)
-        self.required = required
+    def __init__(self, nullable=False, required=False):
         self.nullable = nullable
+        self.required = required
 
-    def validate(self, value):
-        if super().validate(value):
-            result = ((value is None) or self._validate_nullable(value)) and self._validate_required(value)
-            return result
+    def parse_validate(self, value):
+        if self.required and not self.nullable and not value:
+            raise ValueError('value must be defined')
         else:
-            return False
-
-    def _validate_nullable(self, value):
-        if not self.nullable and not value:
-            return False
-        return True
-
-    def _validate_required(self, value):
-        if self.required and value is None:
-            return False
-        return True
+            return value
 
 
-class Typed(Field):
-    ty = (object,)
-
-    def validate(self, value):
-        if super().validate(value):
-            result = (value is None) or self._validate_value(value)
-            return result
-        else:
-            return False
-
-    def _validate_value(self, value):
-        result = False
-        for t in self.ty:
-            if isinstance(value, t):
-                result = result or True
-        return result
+class CharField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        if isinstance(value, str):
+            return value
+        raise ValueError("value is not a string")
 
 
-class Integer(Typed):
-    ty = (int,)
+class ArgumentsField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        # print('super().parse_validate(value)', super().parse_validate(value))
+        if isinstance(value, dict):
+            return value
+        raise ValueError("value in not a dict")
 
 
-class String(Typed):
-    ty = (str,)
+class EmailField(CharField):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        pat = re.compile('^.+@[^\.]+\..+')
+        if pat.match(value):
+            return value
+        raise ValueError("value is not email")
 
 
-class IntOrString(Typed):
-    ty = (int, str)
+class PhoneField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        pat = re.compile('^7\d{10}$')
+        corr_value = str(value) if isinstance(value, int) else value
+        if pat.match(corr_value):
+                return value
+
+        raise ValueError("value is not phone")
 
 
-class List(Typed):
-    ty = (list,)
-
-
-class Dict(Typed):
-    ty = (dict,)
-
-
-class CharField(String, Nullable):
-    pass
-
-
-class Regex(Field):
-    def __init__(self, *args, initial_value=None, pat, **kwargs):
-        super().__init__(initial_value)
-        self.pat = re.compile(pat)
-
-    def _validate_value_regexp(self, value):
+class DateField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        pat = re.compile('^\d{2}.\d{2}.\d{4}$')
         if not isinstance(value, str):
-            value = str(value)
-        if self.pat.match(value):
-            return True
-        return False
-
-    def validate(self, value):
-        if super().validate(value):
-            result = (value is None) or self._validate_value_regexp(value)
-            return result
-        else:
-            return False
-
-
-class EmailField(CharField, Regex):
-    pass
-
-
-class PhoneField(IntOrString, Nullable, Regex):
-    pass
-
-
-class Date(Nullable, String, Regex):
-    def validate(self, value):
-        if super().validate(value):
-            return (value is None) or self._validate_date(value)
-        else:
-            return False
-
-    def _validate_date(self, value):
-        try:
-            date = datetime.datetime.strptime(value, '%d.%m.%Y')
-            current_date = datetime.datetime.now()
-        except ValueError as e:
-            return False
-        else:
-            if relativedelta.relativedelta(current_date, date).years > 70:
-                return False
-        return True
-
-
-class BirthDayField(Date):
-    pass
-
-
-class GenderField(Nullable, Integer):
-    def validate(self, value):
-        if super().validate(value):
-            return (value is None) or self._validate_gender(value)
-        else:
-            return False
-
-    def _validate_gender(self, value):
-        if not value in [0, 1, 2]:
-            return False
-        return True
-
-
-class StructureMeta(type):
-    def __new__(mcs, name, bases, attrs):
-        current_fields = {}
-        for key, value in list(attrs.items()):
-            if isinstance(value, Field):
-                current_fields[key] = value
-                attrs.pop(key)
-        attrs['_fields'] = current_fields
-        attrs['has'] = []
-        attrs['invalid_fields'] = []
-        new_class = (super(StructureMeta, mcs).__new__(mcs, name, bases, attrs))
-        return new_class
-
-
-class Structure(metaclass=StructureMeta):
-    def __init__(self, json_input=None):
-        for name, field in self._fields.items():
-            setattr(self, name, field.initial_value)
-        self.has = []
-        self.invalid_fields = []
-
-        if json_input is not None:
-            json_input = json.dumps(json_input)
-            json_value = json.loads(json_input)
-
-            if not isinstance(json_value, dict):
-                raise RuntimeError("Supplied JSON must be a dictionary")
-
-            for key, value in json_value.items():
-                setattr(self, key, value)
-
-    def __setattr__(self, key, value):
-        if key in self._fields:
-            if self._fields[key].validate(value):
-                if value is None:
-                    if key in self.invalid_fields:
-                        self.invalid_fields.remove(key)
-                    if key in self.has:
-                        self.has.remove(key)
-                else:
-                    if key in self.invalid_fields:
-                        self.invalid_fields.remove(key)
-                    if key not in self.has:
-                        self.has.append(key)
-                super().__setattr__(key, value)
+            raise ValueError('Date value should be string object')
+        if pat.match(value):
+            try:
+                date = datetime.datetime.strptime(value, '%d.%m.%Y')
+            except ValueError:
+                raise ValueError('Date value is not a date')
             else:
-                if key not in self.invalid_fields:
-                    self.invalid_fields.append(key)
-                if key in self.has:
-                    self.has.remove(key)
-
-
-    def validate(self):
-        if self.invalid_fields:
-            logging.info('Invalid some fields')
-            for field in self.invalid_fields:
-                logging.info('Invalid value for field {}'.format(field))
-            return False
-        return True
-
-
-class ClientIDsField(Nullable, List):
-    def validate(self, value):
-        if super().validate(value):
-            return (value is None) or self._validate_ids(value)
+                return date
         else:
-            return False
+            raise ValueError('Date value is not a date')
 
-    def _validate_ids(self, value):
+
+class BirthDayField(DateField):
+    def parse_validate(self, value):
+        date = super().parse_validate(value)
+
+        current_date = datetime.datetime.now()
+        if relativedelta.relativedelta(current_date, date).years < 70:
+            return value
+        raise ValueError('Date value older than 70 years')
+
+
+class GenderField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        if value in [0, 1, 2]:
+            return value
+        raise ValueError('value is not gender')
+
+
+class ClientIDsField(Field):
+    def parse_validate(self, value):
+        super().parse_validate(value)
+        if not isinstance(value, list):
+            raise ValueError('value should be array')
         for val in value:
             if not isinstance(val, int):
-                return False
-            return True
+                raise ValueError('value is not ClientIDsField')
+        return value
 
 
-class DateField(Date):
-    pass
+class RequestHandler(object):
+    def validate_handle(self, request, arguments, ctx, store):
+        if not arguments.is_valid():
+            return arguments.errfmt(), INVALID_REQUEST
+        return self.handle(request, arguments, ctx, store)
+
+    def handle(self, request, arguments, ctx, store):
+        return {}, OK
 
 
-class DateField(Date):
-    pass
+class RequestMeta(type):
+    def __new__(mcs, name, bases, attrs):
+        field_list = []
+        for attr, value in attrs.items():
+            if isinstance(value, Field):
+                field_list.append((attr, value))
+        cls = super().__new__(mcs, name, bases, attrs)
+        cls.fields = field_list
+        return cls
 
 
-class ArgumentsField(Dict, Nullable):
-    pass
+class Request(metaclass=RequestMeta):
+    def __init__(self, request):
+        self.errors = []
+        self.request = request
+        self.is_cleaned = False
 
-class ClientsInterestsRequest(Structure):
+    def clean(self):
+        for attr, value in self.fields:
+            if value.required:
+                if attr not in self.request:
+                    self.errors.append((attr, 'value required.'))
+                    continue
+            if attr in self.request:
+                try:
+                    val = self.request.get(attr)
+                    value.parse_validate(val)
+                    setattr(self, attr, val)
+                except ValueError as ex:
+                    self.errors.append((attr, ex))
+        self.is_cleaned = True
+
+    def is_valid(self):
+        if not self.is_cleaned:
+            self.clean()
+        return not self.errors
+
+    def errfmt(self):
+        return ", ".join([attr for attr, ex in self.errors])
+
+
+class ClientsInterestsRequest(Request):
     client_ids = ClientIDsField(required=True)
-    date = DateField(required=False, nullable=True, pat='^\d{2}.\d{2}.\d{4}$')
+    date = DateField(required=False, nullable=True)
 
-    def get_invalid_fields(self):
-        return self.invalid_fields
 
-    def get_ids(self):
-        return self.client_ids
+class ClientsInterestsHandler(RequestHandler):
+    request_type = ClientsInterestsRequest
 
-class OnlineScoreRequest(Structure):
+    def handle(self, request, arguments, ctx, store):
+        ctx["nclients"] = len(arguments.client_ids)
+        # print('cid', arguments.client_ids)
+        return {cid: scoring.get_interests(store, cid) for cid in arguments.client_ids}, OK
+
+
+class OnlineScoreRequest(Request):
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
-    email = EmailField(required=False, nullable=True, pat='^.+@[^\.]+\..+')
-    phone = PhoneField(required=False, nullable=True, pat='^7\d{10}$')
-    birthday = BirthDayField(required=False, nullable=True, pat='^\d{2}.\d{2}.\d{4}$')
+    email = EmailField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True)
+    birthday = BirthDayField(required=False, nullable=True)
     gender = GenderField(required=False, nullable=True)
 
-    def get_has(self):
-        return self.has
-
-    def get_invalid_fields(self):
-        return self.invalid_fields
-
-    def validate(self):
+    def paire_is_valid(self):
         valid_pairs = [('first_name', 'last_name'), ('email', 'phone'), ('birthday', 'gender')]
-        if super().validate():
-            valid_fields = self.get_has()
+        valid = False
+        if super().is_valid():
             for fv, sv in valid_pairs:
-                if fv in valid_fields and sv in valid_fields:
-                    return True
-            return False
-        else:
-            return False
+                if fv in self.__dict__ and sv in self.__dict__:
+                    valid = True
+        return valid
 
-class MethodRequest(Structure):
+class OnlineScoreHandler(RequestHandler):
+    request_type = OnlineScoreRequest
+
+    def handle(self, request, arguments, ctx, store):
+        ctx['has'] = [key for key, val in arguments.fields if key in arguments.__dict__]
+        if not arguments.paire_is_valid():
+            logging.info('No Valid Paired Arguments, code:{}'.format(INVALID_REQUEST))
+            return ERRORS[INVALID_REQUEST], INVALID_REQUEST
+        if request.is_admin:
+            logging.info('Use admin Auth')
+            score = ADMIN_SCORE
+        else:
+            score = scoring.get_score(store, arguments.phone, arguments.email, arguments.birthday,
+                                         arguments.gender, arguments.first_name, arguments.last_name)
+
+        return {"score": score}, OK
+
+
+class MethodRequest(Request):
     account = CharField(required=False, nullable=True)
     login = CharField(required=True, nullable=True)
     token = CharField(required=True, nullable=True)
@@ -326,57 +258,28 @@ def check_auth(request):
     return False
 
 
-def method_handler(request, ctx, store):
-    if not request['body']:
-        logging.info('No request["body"], error :{}'.format(ERRORS[INVALID_REQUEST]))
-        return {'error': ERRORS[INVALID_REQUEST]}, INVALID_REQUEST
-    request = MethodRequest(request['body'])
-    if not request.validate():
-        return {'error': ERRORS[INVALID_REQUEST]}, INVALID_REQUEST
+def method_handler(request, ctx, settings):
+    methods_map = {
+        "online_score": OnlineScoreHandler,
+        "clients_interests": ClientsInterestsHandler,
+    }
+    method_request = MethodRequest(request["body"])
+    if not method_request.is_valid():
+        logging.info('Invalid Method Request, code:{}, invalid fields:{}'.format(INVALID_REQUEST, method_request.errfmt()))
+        return method_request.errfmt(), INVALID_REQUEST
+    if not check_auth(method_request):
+        logging.info('Invalid Auth, code:{}'.format(FORBIDDEN))
+        return None, FORBIDDEN
 
-    if not check_auth(request):
-        logging.info('Invalid auth, error:{}'.format(ERRORS[FORBIDDEN]))
-        return {'error': ERRORS[FORBIDDEN]}, FORBIDDEN
+    handler_cls = methods_map.get(method_request.method)
+    if not handler_cls:
+        logging.info('Method Not Found, code:{}'.format(NOT_FOUND))
+        return "Method Not Found", NOT_FOUND
 
-    if request.method == 'online_score':
-        logging.info('Request method: {}'.format(request.method))
-
-        score = OnlineScoreRequest(request.arguments)
-        if not score.validate():
-            responce, code = {'error': {name for name in score.get_invalid_fields()}}, INVALID_REQUEST
-            return responce, code
-
-        print('scrore attributes')
-        print(type(score.phone))
-        print(type(score.email))
-        print(type(score.birthday))
-        result_score = scoring.get_score(store, score.phone, score.email, score.birthday, score.gender, score.first_name, score.last_name)
-        ctx['has'] = score.get_has()
-
-        if request.is_admin:
-            logging.info('Admin request, args:{}'.format(request.arguments))
-            response = {'score': ADMIN_SCORE}
-            code = OK
-            return response, code
-        response, code = {'score': result_score}, OK
-        return response, code
-
-    elif request.method == 'clients_interests':
-        logging.info('Request method: {}'.format(request.method))
-        result = {}
-        interests = ClientsInterestsRequest(request.arguments)
-        if not interests.validate():
-            response, code = {'error': {name for name in interests.get_invalid_fields()}}, INVALID_REQUEST
-            return response, code
-
-        client_ids = interests.get_ids()
-        ctx['nclients'] = len(interests.get_ids())
-
-        for id in client_ids:
-            result[id] = scoring.get_interests(store, id)
-
-        response, code = result, OK
-        return response, code
+    response, code = handler_cls().validate_handle(method_request,
+                                                   handler_cls.request_type(method_request.arguments),
+                                                   ctx, settings.get('Store', ''))
+    return response, code
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
@@ -405,7 +308,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                 try:
                     response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
                 except Exception as e:
-                    logging.exception("Unexpected error: {}".format(e))
+                    logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
             else:
                 code = NOT_FOUND
@@ -416,18 +319,12 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         if code not in ERRORS:
             r = {"response": response, "code": code}
         else:
+            # @TODO: return errors as array
             r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
         context.update(r)
         logging.info(context)
         self.wfile.write(json.dumps(r))
         return
-
-def setup_logger(log_path):
-    log_dir = os.path.split(log_path)[0]
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    logging.basicConfig(filename=log_path, level=logging.INFO,
-                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
 
 
 if __name__ == "__main__":
@@ -435,12 +332,17 @@ if __name__ == "__main__":
     op.add_option("-p", "--port", action="store", type=int, default=8080)
     op.add_option("-l", "--log", action="store", default=None)
     (opts, args) = op.parse_args()
+    logging.basicConfig(filename=opts.log, level=logging.INFO,
+                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
     server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
-    setup_logger(opts.log)
-
     logging.info("Starting server at %s" % opts.port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     server.server_close()
+    cf = CharField()
+    # print(cf.parse_validate('sasdfasdf'))
+    # print(cf.parse_validate(345345))
+    af = ArgumentsField(required=True, nullable=True)
+    # print(af.parse_validate({}))
