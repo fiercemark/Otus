@@ -2,7 +2,9 @@ from functools import wraps
 import api
 import scoring
 import os
+from optparse import OptionParser
 import redis
+import logging
 import json
 import numpy as np
 try:
@@ -314,7 +316,6 @@ class TestIntegrate(unittest.TestCase):
             try:
                 result &= self.r.mset({key: val})
             except redis.exceptions.ConnectionError as e:
-                print(os.system('ps ax | grep redis'))
                 print(e)
         return result
 
@@ -429,6 +430,7 @@ class TestStoreClass(unittest.TestCase):
     def test_invalid_cache_get_max_retry(self, case):
         key = case.get('key')
         self.fake_redis_server.connected = False
+        store_value = self.fake_store.cache_get(key)
         self.assertEqual(self.fake_store.get_retry_count(), 5)
 
 
@@ -558,4 +560,10 @@ class TestScoringMethods(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    # op = OptionParser()
+    # op.add_option("-l", "--log", action="store", default=None)
+    # (opts, args) = op.parse_args()
+    # logging.basicConfig(filename=opts.log, level=logging.INFO,
+    #                     format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
+    # logging.info("Starting server at %s" % opts.port)
     unittest.main()
