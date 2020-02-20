@@ -63,7 +63,6 @@ class CharField(Field):
 class ArgumentsField(Field):
     def parse_validate(self, value):
         super().parse_validate(value)
-        # print('super().parse_validate(value)', super().parse_validate(value))
         if isinstance(value, dict):
             return value
         raise ValueError("value in not a dict")
@@ -196,7 +195,6 @@ class ClientsInterestsHandler(RequestHandler):
 
     def handle(self, request, arguments, ctx, store):
         ctx["nclients"] = len(arguments.client_ids)
-        # print('cid', arguments.client_ids)
         return {cid: scoring.get_interests(store, cid) for cid in arguments.client_ids}, OK
 
 
@@ -341,8 +339,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     server.server_close()
-    cf = CharField()
-    # print(cf.parse_validate('sasdfasdf'))
-    # print(cf.parse_validate(345345))
-    af = ArgumentsField(required=True, nullable=True)
-    # print(af.parse_validate({}))

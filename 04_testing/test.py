@@ -2,9 +2,7 @@ from functools import wraps
 import api
 import scoring
 import os
-from optparse import OptionParser
 import redis
-import logging
 import json
 import numpy as np
 try:

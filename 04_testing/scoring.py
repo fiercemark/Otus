@@ -6,9 +6,9 @@ import random
 import api
 try:
     import redis
-    print('redis successfully installed')
+    logging.info('redis successfully installed')
 except ImportError:
-    print('Need install redis module')
+    logging.info('Need install redis module')
 import fakeredis
 
 class Store:
@@ -30,7 +30,6 @@ class Store:
 
 
     def __repr__(self):
-        # print('self.host', self.host)
         return 'Store: host:{}, port:{}, reconnection_delay: {}, reconnection_max_attempts: {}, connection: {}'.\
             format(self.host, self.port, self.reconnection_delay, self.reconnect_max_attempts, self._connection)
 
@@ -42,17 +41,13 @@ class Store:
     def get_connection(self, **kwargs):
         if not self.connected:
             self.attempt = 1
-            # print('get_connection')
             while True:
-                # print('self.attempt', self.attempt)
                 try:
                     if self.use_fake:
-                        # print('self.fake_server.connected', self.fake_server.connected)
                         r = fakeredis.FakeStrictRedis(server=self.fake_server, socket_timeout=self.default_timeout, \
                                                       socket_connect_timeout=self.default_timeout)
                     else:
                         r = redis.Redis(host=self.host, port=self.port, db=self.db, **kwargs)
-                    # print('ping', r.ping())
                     self.connected = True
                     return r
                 except redis.exceptions.ConnectionError as e:
@@ -70,7 +65,6 @@ class Store:
         self.attempt = 1
         while True:
             if not self.connected:
-                # time.sleep(self.reconnection_delay + self.get_jitter_delay())
                 self._connection = self.get_connection()
                 logging.info('Successfully reconnected')
             try:
@@ -91,14 +85,11 @@ class Store:
         self.attempt = 1
         while True:
             if not self.connected:
-                # print(time.sleep(self.reconnection_delay + self.get_jitter_delay()))
                 self._connection = self.get_connection()
                 logging.info('Successfully reconnected')
-            # print('ping', self._connection.ping())
             try:
                 # self._connection.ping()
                 response = self._connection.set(key, value, ex=ex)
-                print('response', response)
                 break
             except redis.exceptions.ConnectionError as e:
                 if self.attempt >= self.reconnect_max_attempts:
@@ -134,8 +125,6 @@ class Store:
 
 
     def set(self, key, value):
-        # Нужно умень записывать какие-то значения в БД.
-        # Что кромем key, value нужно установить в set()?
         self.attempt = 1
         while True:
             if not self.connected:
@@ -160,7 +149,6 @@ class Store:
         return self.attempt
 
 
-
 def get_key(first_name, last_name, phone, birthday):
     key_parts = [
         first_name if first_name and not isinstance(first_name, api.Field) else "",
@@ -168,18 +156,15 @@ def get_key(first_name, last_name, phone, birthday):
         str(phone) if phone and not isinstance(phone, api.Field) else "",
         birthday if birthday and not isinstance(birthday, api.Field) else "",
     ]
-    print('scoring key_parts', key_parts)
     return "uid:" + hashlib.md5("".join(key_parts).encode('utf-8')).hexdigest()
 
-def get_score(store, phone=None, email=None, birthday=None, gender=None, first_name=None, last_name=None):
-    print('Start get_score!')
 
+def get_score(store, phone=None, email=None, birthday=None, gender=None, first_name=None, last_name=None):
+    logging.info('Start get_score!')
 
     key = get_key(first_name, last_name, phone, birthday)
-
     # try get from cache,
     # fallback to heavy calculation in case of cache miss
-    # print('scoring. call cache_get()')
     score = store.cache_get(key) or 0
     if score:
         return score
@@ -192,7 +177,6 @@ def get_score(store, phone=None, email=None, birthday=None, gender=None, first_n
     if first_name and last_name:
         score += 0.5
     # cache for 60 minutes
-    # print('scoring. call cache_set()')
     store.cache_set(key, score, 60 * 60)
     return score
 
@@ -203,29 +187,3 @@ def get_interests(store, cid):
     except Exception as e:
         logging.exception('Store unavaliable')
     return json.loads(r) if r else []
-
-
-import os
-import fakeredis
-if __name__ == '__main__':
-    # print(store)
-    # os.system('./start-redis-server.sh')
-
-    store = Store()
-
-    print(store.cache_set('Alpha','1234', 60*60))
-    # print('invalid get result: {}'.format(store.get('asdf')))
-    # print('store set result', store.set('12345', json.dumps([1,2,2,3])))
-    # print('store get', json.loads(store.get('12345')))
-    # print('cache_get', store.cache_get('email'))
-    # print(store.ping())
-    # print(store.get_retry_count())
-    os.system('pkill redis-server; rm dump.rdb')
-
-    # server = fakeredis.FakeServer()
-    # server.connected = False
-    # r = fakeredis.FakeStrictRedis(server=server)
-
-
-    # print(store.cache_get('Alpha'))
-
