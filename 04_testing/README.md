@@ -1,7 +1,7 @@
-# log analyzer
+log analyzer
 ==============================
 
-This is a simple log analyzer.
+This is a simple api for scoring system.
 
 Usage example
 ---------------
@@ -11,6 +11,12 @@ Usage example
 Testing
 -------
 
-1. Run the command `python -m unittest -v test`
-2. All test should be `OK`
+**Unit**
+1. Run the command `python -m unittest discover -s tests/unit`
+2. All 30 tests should be `OK`
+
+**Integration**
+1. Run the command `python -m unittest discover -s tests/integration`
+2. All 3 tests should be `OK`
+
 

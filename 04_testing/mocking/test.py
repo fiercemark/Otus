@@ -17,7 +17,7 @@ import fakeredis
 
 
 config = {
-    'REDIS_LUNCH_SCRIPT' : 'start-redis-server.sh'
+    'REDIS_LUNCH_SCRIPT': './start-redis-server.sh'
 }
 
 def cases(cases):
@@ -286,13 +286,14 @@ class TestIntegrate(unittest.TestCase):
         self.context = {}
         self.headers = {}
         self.settings = {'Store': scoring.Store()}
-        os.system('rm dump.rdb')
         lunch_redis()
-        self.r = redis.Redis(host='127.0.0.1', port=6379)
+        self.redis = redis.Redis(host='127.0.0.1', port=6379)
 
 
     def tearDown(self):
-        self.r.connection_pool.disconnect()
+        os.system('pkill redis')
+        if os.path.exists('dump.rdb'):
+            os.system('rm dump.rdb')
 
 
     def get_response(self, request):
@@ -308,17 +309,18 @@ class TestIntegrate(unittest.TestCase):
             request["token"] = hashlib.sha512(msg.encode('utf-8')).hexdigest()
 
 
-    def set_online_score_data(self, case):
+    def set_online_score_data(self, case, connection):
         result = True
         for key, val in case.items():
             try:
-                result &= self.r.mset({key: val})
+                result &= connection.mset({key: val})
             except redis.exceptions.ConnectionError as e:
-                print(e)
+                pass
+                # print(e)
         return result
 
 
-    def set_interests_request_data(self, case):
+    def set_interests_request_data(self, case, connection):
         result = True
         interests_map = {
                     1: 'hi-tech',
@@ -332,7 +334,7 @@ class TestIntegrate(unittest.TestCase):
             return False
         for cid in case.get('client_ids'):
             a, b = np.random.choice([1, 2, 3, 4, 5, 6], 2, replace=False)
-            result &= self.r.mset({cid: json.dumps([interests_map.get(a), interests_map.get(b)])})
+            result &= connection.mset({cid: json.dumps([interests_map.get(a), interests_map.get(b)])})
         return result
 
 
@@ -347,7 +349,7 @@ class TestIntegrate(unittest.TestCase):
          "first_name": "a", "last_name": "b"},
     ])
     def test_integrate_ok_score_request(self, arguments):
-        self.set_online_score_data(arguments)
+        self.set_online_score_data(arguments, self.redis)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "online_score", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
@@ -363,7 +365,7 @@ class TestIntegrate(unittest.TestCase):
         {"client_ids": [0]},
     ])
     def test_integrate_ok_interests_request(self, arguments):
-        self.set_interests_request_data(arguments)
+        self.set_interests_request_data(arguments, self.redis)
         request = {"account": "horns&hoofs", "login": "h&f", "method": "clients_interests", "arguments": arguments}
         self.set_valid_auth(request)
         response, code = self.get_response(request)
