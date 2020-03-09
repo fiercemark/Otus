@@ -132,7 +132,7 @@ class TestIntegrate(unittest.TestCase):
         self.assertEqual(len(arguments["client_ids"]), len(response))
 
 
-class TestStoreIntegrate(unittest.TestCase):
+class TestStoreOKIntegrate(unittest.TestCase):
     def setUp(self):
         self.store = store.Store()
 
@@ -236,7 +236,7 @@ class TestStoreInvalid(unittest.TestCase):
         {'key': 'email'},
         {'key': 'first_name'}
     ])
-    def test_invalid_get_max_retry(self, case):
+    def test_invalid_get_timeout(self, case):
         key = case.get('key')
         with self.assertRaises(TimeoutError) as context:
             self.timeouted_store.get(key)
