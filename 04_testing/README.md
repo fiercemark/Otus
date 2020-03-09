@@ -1,4 +1,4 @@
-log analyzer
+API Testing
 ==============================
 
 This is a simple api for scoring system.
@@ -16,7 +16,8 @@ Testing
 2. All 30 tests should be `OK`
 
 **Integration**
-1. Run the command `python -m unittest discover -s tests/integration`
-2. All 3 tests should be `OK`
+1. Export REDIS_SERVER_LUNCHER `export REDIS_SERVER_LUNCHER=./tests/integration/start-redis-server.sh`
+2. Run the command `python -m unittest discover -s tests/integration`
+3. All 3 tests should be `OK`
 
 

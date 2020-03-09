@@ -1,6 +1,6 @@
-from functools import wraps
 import api
 import scoring
+import store
 import os
 import json
 import numpy as np
@@ -13,26 +13,8 @@ import unittest
 import hashlib
 import datetime
 import fakeredis
+from tests.cases import cases
 
-
-config = {
-    'REDIS_LUNCH_SCRIPT': './start-redis-server.sh'
-}
-
-def cases(cases):
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args):
-            for case in cases:
-                new_args = args + (case if isinstance(case, tuple) else (case,))
-                f(*new_args)
-        return wrapper
-    return decorator
-
-
-def lunch_redis():
-    os.system(config.get('REDIS_LUNCH_SCRIPT'))
-    return True
 
 class MockStore:
     def __init__(self):
@@ -219,7 +201,7 @@ class TestSuite(unittest.TestCase):
         self.assertTrue(len(response))
 
 
-    @mock.patch('scoring.Store')
+    @mock.patch('store.Store')
     @cases([
         {},
         {"phone": "79175002040"},
@@ -246,7 +228,7 @@ class TestSuite(unittest.TestCase):
         self.assertTrue(len(response))
 
 
-    @mock.patch('scoring.Store')
+    @mock.patch('store.Store')
     def test_ok_score_admin_request(self, MockStore):
         arguments = {"phone": "79175002040", "email": "stupnikov@otus.ru"}
         request = {"account": "horns&hoofs", "login": "admin", "method": "online_score", "arguments": arguments}
@@ -260,7 +242,7 @@ class TestSuite(unittest.TestCase):
         self.assertEqual(score, 42)
 
 
-    @mock.patch('scoring.Store')
+    @mock.patch('store.Store')
     @cases([
         {},
         {"date": "20.07.2017"},
@@ -282,7 +264,7 @@ class TestSuite(unittest.TestCase):
 class TestStoreClass(unittest.TestCase):
     def setUp(self):
         self.fake_redis_server = fakeredis.FakeServer()
-        self.fake_store = scoring.Store(use_fake=True, fake_server=self.fake_redis_server)
+        self.fake_store = store.Store(use_fake=True, fake_server=self.fake_redis_server)
 
 
     def set_key_to_redis(self, case):
@@ -404,7 +386,7 @@ class TestStoreClass(unittest.TestCase):
 class TestScoringMethods(unittest.TestCase):
     def setUp(self):
         self.fake_redis_server = fakeredis.FakeServer()
-        self.fake_store = scoring.Store(use_fake=True, fake_server=self.fake_redis_server)
+        self.fake_store = store.Store(use_fake=True, fake_server=self.fake_redis_server)
         self.r = fakeredis.FakeStrictRedis(server=self.fake_redis_server)
 
     def tearDown(self):
@@ -419,6 +401,7 @@ class TestScoringMethods(unittest.TestCase):
         phone, birthday, first_name, last_name, email, gender, score = arguments
         score = scoring.get_score(self.fake_store, phone=phone, birthday=birthday, email=email, gender=gender,\
                                                                             first_name=first_name, last_name=last_name)
+
         key = scoring.get_key(first_name, last_name, phone, birthday)
         r = fakeredis.FakeStrictRedis(server=self.fake_redis_server)
         self.assertEqual(float(r.get(key)), score)
